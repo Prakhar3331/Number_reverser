@@ -48,7 +48,7 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh "docker build --no-cache -t ${appRegistry}:${env.BUILD_NUMBER} -t ${appRegistry}:latest ."
+                sh "docker build --no-cache -t ${appRegistry}:${env.BUILD_NUMBER} ."
             }
         }
 
@@ -75,7 +75,6 @@ pipeline {
                         
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ecrRegistry}
                         docker push ${appRegistry}:${BUILD_NUMBER}
-                        docker push ${appRegistry}:latest
                     '''
                 }
             }
