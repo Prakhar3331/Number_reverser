@@ -1,0 +1,18 @@
+# ==============================================================================
+# S3 Remote State Backend Configuration
+# ==============================================================================
+# 1. Create the S3 bucket & DynamoDB table (see README.md or scripts/setup-backend.ps1)
+# 2. Rename this file to 'backend.tf' (or uncomment in main.tf)
+# 3. Replace 'YOUR-UNIQUE-TERRAFORM-STATE-BUCKET' with your S3 bucket name
+# 4. Run 'terraform init -migrate-state'
+# ==============================================================================
+
+terraform {
+  backend "s3" {
+    bucket         = "YOUR-UNIQUE-TERRAFORM-STATE-BUCKET"
+    key            = "number-reverser/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-state-locks"
+    encrypt        = true
+  }
+}
