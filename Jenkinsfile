@@ -63,13 +63,16 @@ pipeline {
 
         stage('Push to Amazon ECR') {
             steps {
-                withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                     sh '''
+                        set -ex
                         export AWS_DEFAULT_REGION="${AWS_REGION}"
                         export AWS_REGION="${AWS_REGION}"
                         
                         # Dynamically and securely obtain AWS Account ID from authenticated STS identity
                         AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                        echo "Deploying to AWS Account: ${AWS_ACCOUNT_ID}"
+                        
                         ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                         IMAGE_URI="${ECR_REGISTRY}/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
                         
@@ -82,6 +85,7 @@ pipeline {
                         
                         docker push ${IMAGE_URI}
                         docker push ${ECR_REGISTRY}/${APP_NAME}:latest
+                        echo "ECR Push completed successfully!"
                     '''
                 }
             }
@@ -89,9 +93,10 @@ pipeline {
 
         stage('Cosign Sign & Verify') {
             steps {
-                withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY'),
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'],
                                 file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
+                        set -ex
                         AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
                         IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
                         
@@ -104,8 +109,9 @@ pipeline {
 
         stage('Deploy to EKS & Verify') {
             steps {
-                withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                     sh '''
+                        set -ex
                         export AWS_DEFAULT_REGION="${AWS_REGION}"
                         export AWS_REGION="${AWS_REGION}"
                         
