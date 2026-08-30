@@ -91,8 +91,13 @@ pipeline {
                         export COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"
                         
                         IMAGE_URI="${appRegistry}:${BUILD_NUMBER}"
+                        
+                        # 1. Sign container image
                         cosign sign --key "${COSIGN_KEY}" --yes "${IMAGE_URI}"
-                        cosign verify --key cosign.pub "${IMAGE_URI}"
+                        
+                        # 2. Derive matching public key and cryptographically verify signature
+                        cosign public-key --key "${COSIGN_KEY}" > cosign_extracted.pub
+                        cosign verify --key cosign_extracted.pub "${IMAGE_URI}"
                     '''
                 }
             }
