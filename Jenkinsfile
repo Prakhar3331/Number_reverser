@@ -41,7 +41,8 @@ pipeline {
                 sh '''
                     terraform -chdir=terraform init -backend=false
                     terraform -chdir=terraform validate
-                    checkov -d terraform/ --framework terraform --soft-fail=false
+                    . .venv/bin/activate
+                    checkov -d terraform/ --framework terraform
                 '''
             }
         }
