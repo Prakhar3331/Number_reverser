@@ -17,7 +17,9 @@ pipeline {
         stage('Lint & Security Check') {
             steps {
                 sh '''
-                    pip install --quiet flake8 black bandit
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    pip install --quiet -r requirements-dev.txt
                     black --check app/
                     flake8 app/ --max-line-length=100
                     bandit -r app/ -ll -ii
@@ -28,7 +30,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 sh '''
-                    pip install --quiet -r requirements-dev.txt
+                    . .venv/bin/activate
                     pytest -v --cov=app --cov-fail-under=90
                 '''
             }
