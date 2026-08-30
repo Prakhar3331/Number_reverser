@@ -8,7 +8,7 @@ terraform {
   }
 
   # ----------------------------------------------------------------------------
-  # S3 Remote State Backend (Uncomment and fill bucket name after creating S3 bucket)
+  # S3 Remote State Backend Configuration (Optional)
   # ----------------------------------------------------------------------------
   # backend "s3" {
   #   bucket         = "YOUR-UNIQUE-TERRAFORM-STATE-BUCKET"
@@ -37,7 +37,13 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Restrict default security group
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+}
+
 resource "aws_vpc" "main" {
+  #checkov:skip=CKV2_AWS_11:VPC flow logs disabled to avoid CloudWatch log fees in Free Tier
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -56,6 +62,7 @@ resource "aws_internet_gateway" "main" {
 
 # Public Subnets (Hosts NAT Gateway & Public Load Balancers)
 resource "aws_subnet" "public_1" {
+  #checkov:skip=CKV_AWS_130:Public subnets require public IPs for load balancer ingress
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = data.aws_availability_zones.available.names[0]
@@ -68,6 +75,7 @@ resource "aws_subnet" "public_1" {
 }
 
 resource "aws_subnet" "public_2" {
+  #checkov:skip=CKV_AWS_130:Public subnets require public IPs for load balancer ingress
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.2.0/24"
   availability_zone       = data.aws_availability_zones.available.names[1]
@@ -168,6 +176,7 @@ resource "aws_route_table_association" "priv_2" {
 # 2. Amazon ECR Container Registry (Free Tier: 500MB storage included)
 # ==============================================================================
 resource "aws_ecr_repository" "main" {
+  #checkov:skip=CKV_AWS_136:AES256 server-side encryption used to stay within Free Tier
   name                 = var.project_name
   image_tag_mutability = "IMMUTABLE"
 
@@ -230,17 +239,37 @@ resource "aws_iam_role_policy_attachment" "node_AmazonEC2ContainerRegistryReadOn
 }
 
 # ==============================================================================
-# 4. Amazon EKS Cluster Control Plane
+# 4. KMS Key for EKS Envelope Encryption
+# ==============================================================================
+resource "aws_kms_key" "eks" {
+  description             = "KMS Key for EKS secrets envelope encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+# ==============================================================================
+# 5. Amazon EKS Cluster Control Plane
 # ==============================================================================
 resource "aws_eks_cluster" "main" {
+  #checkov:skip=CKV_AWS_38:Public API endpoint access required for CI/CD pipeline deployer
+  #checkov:skip=CKV_AWS_39:Public API endpoint access required for external kubectl management
   name     = "${var.project_name}-cluster"
   role_arn = aws_iam_role.cluster.arn
   version  = "1.30"
+
+  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
   vpc_config {
     subnet_ids              = [aws_subnet.public_1.id, aws_subnet.public_2.id, aws_subnet.private_1.id, aws_subnet.private_2.id]
     endpoint_private_access = true
     endpoint_public_access  = true
+  }
+
+  encryption_config {
+    provider {
+      key_arn = aws_kms_key.eks.arn
+    }
+    resources = ["secrets"]
   }
 
   depends_on = [
@@ -249,7 +278,7 @@ resource "aws_eks_cluster" "main" {
 }
 
 # ==============================================================================
-# 5. Free-Tier Managed Node Group in Private Subnets (t3.micro, 20GB gp3 EBS)
+# 6. Free-Tier Managed Node Group in Private Subnets (t3.micro, 20GB gp3 EBS)
 # ==============================================================================
 resource "aws_launch_template" "node" {
   name_prefix   = "${var.project_name}-node-lt-"
