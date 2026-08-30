@@ -44,6 +44,18 @@ pipeline {
             }
         }
 
+        stage('Terraform Apply (Provision AWS Infrastructure)') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh '''
+                        cd terraform
+                        terraform init
+                        terraform apply -auto-approve
+                    '''
+                }
+            }
+        }
+
         stage('Docker Build') {
             steps {
                 sh "docker build -t ${IMAGE_URI} -t ${APP_NAME}:local ."

@@ -330,19 +330,20 @@ Configure the following in **Manage Jenkins $\rightarrow$ Credentials $\rightarr
 | `aws-credentials` | **AWS Credentials** | AWS Access Key ID and Secret Access Key |
 | `cosign-key` | **Secret file** | `cosign.key` private key file for signing images |
 
-### 8.2 Pipeline Stages Explained
+### 8.3 Pipeline Stages Explained
 1. **Lint & Security Check**: Runs `black`, `flake8`, and `bandit` AST security linter.
 2. **Unit Tests**: Runs `pytest` and verifies code coverage is at least 90%.
 3. **Terraform Validation & Checkov**: Validates Terraform syntax and runs Checkov IaC security scan.
-4. **Docker Build**: Builds the minimal non-root Docker image.
-5. **Trivy Security Scan**: Scans container image. Fails the build immediately (`--exit-code 1`) if any `CRITICAL` or `HIGH` vulnerabilities are found.
-6. **Generate SBOM (Syft)**: Produces an SPDX JSON Software Bill of Materials and archives it as a build artifact.
-7. **Push to Amazon ECR**: Authenticates to ECR and pushes the immutable image tag (`v1.0.0-<BUILD_NUMBER>`).
-8. **Cosign Sign & Verify**: Cryptographically signs the container image with Cosign and verifies the signature against `cosign.pub` before deploying.
-9. **Deploy to EKS & Verify**: Applies Kyverno policies, NetworkPolicy, updates the deployment image, and waits for `kubectl rollout status`.
-10. **Smoke Test**: Port-forwards to the service and executes live health and reverse API checks.
+4. **Terraform Apply (AWS Infrastructure Provisioning)**: Initializes and automatically runs `terraform apply -auto-approve` to provision or update the VPC, EKS Cluster, and ECR repository.
+5. **Docker Build**: Builds the minimal non-root Docker image.
+6. **Trivy Security Scan**: Scans container image. Fails the build immediately (`--exit-code 1`) if any `CRITICAL` or `HIGH` vulnerabilities are found.
+7. **Generate SBOM (Syft)**: Produces an SPDX JSON Software Bill of Materials and archives it as a build artifact.
+8. **Push to Amazon ECR**: Authenticates to ECR and pushes the immutable image tag (`v1.0.0-<BUILD_NUMBER>`).
+9. **Cosign Sign & Verify**: Cryptographically signs the container image with Cosign and verifies the signature against `cosign.pub` before deploying.
+10. **Deploy to EKS & Verify**: Applies Kyverno policies, NetworkPolicy, updates the deployment image, and waits for `kubectl rollout status`.
+11. **Smoke Test**: Port-forwards to the service and executes live health and reverse API checks.
 
-### 8.3 Triggering the Pipeline
+### 8.4 Triggering the Pipeline
 1. Create a **Pipeline** job in Jenkins.
 2. Under **Pipeline Definition**, select **Pipeline script from SCM**.
 3. Set SCM to **Git** and enter the repository URL.
