@@ -56,7 +56,7 @@ pipeline {
         stage('Trivy Security Scan') {
             steps {
                 // Fails the pipeline if any CRITICAL or HIGH vulnerabilities are found
-                sh "trivy image --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed ${APP_NAME}:local"
+                sh "trivy image --cache-dir .trivy-cache --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed ${APP_NAME}:local"
             }
         }
 
