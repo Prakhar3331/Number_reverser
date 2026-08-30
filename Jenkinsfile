@@ -48,9 +48,7 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                script {
-                    dockerImage = docker.build("${appRegistry}:${env.BUILD_NUMBER}", "--no-cache .")
-                }
+                sh "docker build --no-cache -t ${appRegistry}:${env.BUILD_NUMBER} -t ${appRegistry}:latest ."
             }
         }
 
@@ -69,18 +67,23 @@ pipeline {
 
         stage('Upload App Image') {
             steps {
-                script {
-                    docker.withRegistry(ecrRegistry, registryCredential) {
-                        dockerImage.push("${env.BUILD_NUMBER}")
-                        dockerImage.push('latest')
-                    }
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                    sh '''
+                        set -ex
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                        export AWS_REGION="${AWS_REGION}"
+                        
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ecrRegistry}
+                        docker push ${appRegistry}:${BUILD_NUMBER}
+                        docker push ${appRegistry}:latest
+                    '''
                 }
             }
         }
 
         stage('Cosign Sign & Verify') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY'),
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'],
                                 file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
                         set -ex
@@ -94,7 +97,7 @@ pipeline {
 
         stage('Deploy to EKS & Verify') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                     sh '''
                         set -ex
                         export AWS_DEFAULT_REGION="${AWS_REGION}"
