@@ -306,6 +306,7 @@ resource "aws_eks_node_group" "main" {
   node_group_name = "${var.project_name}-ng"
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = [aws_subnet.private_1.id, aws_subnet.private_2.id] # Placed in private subnets for security
+  ami_type        = "AL2023_x86_64_STANDARD"                           # Amazon Linux 2023 required for EKS v1.30+
 
   scaling_config {
     desired_size = 1 # 1 node keeps EC2 within 750 free tier hours/month
