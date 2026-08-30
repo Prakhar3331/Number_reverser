@@ -13,10 +13,10 @@ finally {
 }
 
 Write-Host "=== 2. Updating Kubeconfig ===" -ForegroundColor Cyan
-aws eks update-kubeconfig --region us-east-1 --name $ClusterName
+aws eks update-kubeconfig --region ap-south-1 --name $ClusterName
 
 Write-Host "=== 3. Building & Pushing Docker Image ===" -ForegroundColor Cyan
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $EcrUrl
+aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $EcrUrl
 docker build -t "$($EcrUrl):v1.0.0" .
 docker push "$($EcrUrl):v1.0.0"
 

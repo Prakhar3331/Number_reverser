@@ -9,10 +9,10 @@ ECR_URL=$(terraform output -raw ecr_repository_url)
 cd ..
 
 echo "=== 2. Updating Kubeconfig ==="
-aws eks update-kubeconfig --region us-east-1 --name "${CLUSTER_NAME}"
+aws eks update-kubeconfig --region ap-south-1 --name "${CLUSTER_NAME}"
 
 echo "=== 3. Building & Pushing Docker Image ==="
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${ECR_URL}"
+aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin "${ECR_URL}"
 docker build -t "${ECR_URL}:v1.0.0" .
 docker push "${ECR_URL}:v1.0.0"
 

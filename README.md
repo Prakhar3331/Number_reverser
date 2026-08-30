@@ -209,7 +209,7 @@ Ensure your AWS credentials have permissions to manage VPC, EKS, EC2, IAM, ECR, 
 ```bash
 export AWS_ACCESS_KEY_ID="<YOUR_AWS_ACCESS_KEY_ID>"
 export AWS_SECRET_ACCESS_KEY="<YOUR_AWS_SECRET_ACCESS_KEY>"
-export AWS_REGION="us-east-1"
+export AWS_REGION="ap-south-1"
 ```
 
 ### 6.2 Set Up S3 Remote State Backend & DynamoDB Lock Table (Optional but Recommended)
@@ -217,12 +217,12 @@ To store your Terraform state securely in Amazon S3 with DynamoDB distributed st
 
 ```bash
 # Option A: Run the automated helper script
-./scripts/setup-backend.sh <YOUR_UNIQUE_STATE_BUCKET_NAME> us-east-1    # Linux/macOS
+./scripts/setup-backend.sh <YOUR_UNIQUE_STATE_BUCKET_NAME> ap-south-1    # Linux/macOS
 .\scripts\setup-backend.ps1 -BucketName <YOUR_UNIQUE_STATE_BUCKET_NAME> # Windows PowerShell
 
 # Option B: Run manual AWS CLI commands
 # 1. Create S3 Bucket (must be globally unique)
-aws s3api create-bucket --bucket <YOUR_UNIQUE_STATE_BUCKET_NAME> --region us-east-1
+aws s3api create-bucket --bucket <YOUR_UNIQUE_STATE_BUCKET_NAME> --region ap-south-1 --create-bucket-configuration LocationConstraint=ap-south-1
 
 # 2. Enable Bucket Versioning
 aws s3api put-bucket-versioning --bucket <YOUR_UNIQUE_STATE_BUCKET_NAME> --versioning-configuration Status=Enabled
@@ -241,7 +241,7 @@ aws dynamodb create-table \
     --attribute-definitions AttributeName=LockID,AttributeType=S \
     --key-schema AttributeName=LockID,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
-    --region us-east-1
+    --region ap-south-1
 ```
 
 After creating the bucket, copy `terraform/backend.tf.example` to `terraform/backend.tf` and fill in your bucket name:
@@ -250,7 +250,7 @@ terraform {
   backend "s3" {
     bucket         = "<YOUR_UNIQUE_STATE_BUCKET_NAME>"
     key            = "number-reverser/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "ap-south-1"
     dynamodb_table = "terraform-state-locks"
     encrypt        = true
   }
@@ -276,13 +276,13 @@ terraform apply tfplan
 
 # Note the outputs:
 # - cluster_name: number-reverser-cluster
-# - ecr_repository_url: <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/number-reverser
+# - ecr_repository_url: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/number-reverser
 cd ..
 ```
 
 ### 6.4 Connect Kubectl to EKS Cluster
 ```bash
-aws eks update-kubeconfig --region us-east-1 --name number-reverser-cluster
+aws eks update-kubeconfig --region ap-south-1 --name number-reverser-cluster
 kubectl get nodes
 ```
 
@@ -294,11 +294,11 @@ If deploying manually without CI/CD:
 
 ```bash
 # 1. Login to Amazon ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com
 
 # 2. Build, tag, and push Docker image
-docker build -t <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/number-reverser:v1.0.0 .
-docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/number-reverser:v1.0.0
+docker build -t <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/number-reverser:v1.0.0 .
+docker push <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/number-reverser:v1.0.0
 
 # 3. Apply Kyverno security policies & NetworkPolicy
 kubectl apply -f k8s/kyverno.yaml

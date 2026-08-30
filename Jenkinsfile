@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION         = 'us-east-1'
+        AWS_REGION         = 'ap-south-1'
         AWS_CREDENTIALS_ID = 'aws-credentials'
         AWS_ACCOUNT_ID     = credentials('aws-account-id')
         APP_NAME           = 'number-reverser'

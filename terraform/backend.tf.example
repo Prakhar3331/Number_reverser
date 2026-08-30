@@ -11,7 +11,7 @@ terraform {
   backend "s3" {
     bucket         = "YOUR-UNIQUE-TERRAFORM-STATE-BUCKET"
     key            = "number-reverser/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "ap-south-1"
     dynamodb_table = "terraform-state-locks"
     encrypt        = true
   }

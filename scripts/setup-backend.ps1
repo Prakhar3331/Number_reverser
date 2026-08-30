@@ -4,7 +4,7 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$BucketName,
-    [string]$Region = "us-east-1"
+    [string]$Region = "ap-south-1"
 )
 
 $ErrorActionPreference = "Stop"

@@ -5,7 +5,7 @@
 set -e
 
 BUCKET_NAME="${1:-}"
-AWS_REGION="${2:-us-east-1}"
+AWS_REGION="${2:-ap-south-1}"
 DYNAMODB_TABLE="terraform-state-locks"
 
 if [ -z "${BUCKET_NAME}" ]; then
