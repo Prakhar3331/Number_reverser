@@ -132,19 +132,26 @@ pipeline {
 
         stage('Smoke Test') {
             steps {
-                sh '''
-                    set -e
-                    kubectl port-forward svc/number-reverser 8000:80 -n number-reverser &
-                    PF_PID=$!
-                    sleep 5
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                    sh '''
+                        set -ex
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                        export AWS_REGION="${AWS_REGION}"
+                        
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+                        
+                        kubectl port-forward svc/number-reverser 8000:80 -n number-reverser &
+                        PF_PID=$!
+                        sleep 6
 
-                    # Verify healthz and reverse endpoints
-                    curl -sf http://127.0.0.1:8000/healthz
-                    curl -sf -X POST http://127.0.0.1:8000/api/v1/reverse -H "Content-Type: application/json" -d '{"number": 12345}' | grep 54321
+                        # Verify healthz and reverse endpoints
+                        curl -sf http://127.0.0.1:8000/healthz
+                        curl -sf -X POST http://127.0.0.1:8000/api/v1/reverse -H "Content-Type: application/json" -d '{"number": 12345}' | grep 54321
 
-                    kill $PF_PID 2>/dev/null || true
-                    echo "Smoke tests passed successfully!"
-                '''
+                        kill $PF_PID 2>/dev/null || true
+                        echo "All smoke tests passed successfully!"
+                    '''
+                }
             }
         }
     }
