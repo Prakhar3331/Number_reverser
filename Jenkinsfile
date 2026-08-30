@@ -113,14 +113,18 @@ pipeline {
                         
                         aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
                         
-                        # Apply Kyverno policies, NetworkPolicy, and Deployment
-                        kubectl apply -f k8s/kyverno.yaml
-                        kubectl apply -f k8s/networkpolicy.yaml
-                        kubectl apply -f k8s/deployment.yaml
+                        # Apply Kyverno policies if CRDs are installed on the cluster
+                        if kubectl get crd clusterpolicies.kyverno.io >/dev/null 2>&1; then
+                            kubectl apply -f k8s/kyverno.yaml
+                        fi
                         
-                        # Set to deployed image tag
+                        # Apply Deployment and NetworkPolicy
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/networkpolicy.yaml
+                        
+                        # Roll out the new immutable container image
                         kubectl set image deployment/number-reverser number-reverser=${appRegistry}:${BUILD_NUMBER} -n number-reverser
-                        kubectl rollout status deployment/number-reverser -n number-reverser --timeout=120s
+                        kubectl rollout status deployment/number-reverser -n number-reverser --timeout=180s
                     '''
                 }
             }
@@ -129,16 +133,17 @@ pipeline {
         stage('Smoke Test') {
             steps {
                 sh '''
+                    set -e
                     kubectl port-forward svc/number-reverser 8000:80 -n number-reverser &
                     PF_PID=$!
-                    sleep 3
+                    sleep 5
 
-                    # Verify health and reverse endpoint
+                    # Verify healthz and reverse endpoints
                     curl -sf http://127.0.0.1:8000/healthz
                     curl -sf -X POST http://127.0.0.1:8000/api/v1/reverse -H "Content-Type: application/json" -d '{"number": 12345}' | grep 54321
 
-                    kill $PF_PID
-                    echo "Smoke tests passed!"
+                    kill $PF_PID 2>/dev/null || true
+                    echo "Smoke tests passed successfully!"
                 '''
             }
         }
