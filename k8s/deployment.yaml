@@ -26,7 +26,7 @@ spec:
         runAsGroup: 10001
       containers:
         - name: number-reverser
-          image: 374857852848.dkr.ecr.ap-south-1.amazonaws.com/number-reverser:v1.0.0
+          image: number-reverser:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

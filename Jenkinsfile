@@ -4,13 +4,8 @@ pipeline {
     environment {
         AWS_REGION         = 'ap-south-1'
         AWS_CREDENTIALS_ID = 'aws-credentials'
-        AWS_ACCOUNT_ID     = '374857852848'
         APP_NAME           = 'number-reverser'
         CLUSTER_NAME       = 'number-reverser-cluster'
-        
-        IMAGE_TAG          = "v1.0.0-${env.BUILD_NUMBER}"
-        ECR_REGISTRY       = "374857852848.dkr.ecr.ap-south-1.amazonaws.com"
-        IMAGE_URI          = "374857852848.dkr.ecr.ap-south-1.amazonaws.com/number-reverser:v1.0.0-${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -49,7 +44,7 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh "docker build --no-cache -t ${IMAGE_URI} -t ${APP_NAME}:local ."
+                sh "docker build --no-cache -t ${APP_NAME}:local ."
             }
         }
 
@@ -73,10 +68,15 @@ pipeline {
                         export AWS_DEFAULT_REGION="${AWS_REGION}"
                         export AWS_REGION="${AWS_REGION}"
                         
-                        # 1. Authenticate with ECR
+                        # Dynamically and securely obtain AWS Account ID from authenticated STS identity
+                        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                        ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                        IMAGE_URI="${ECR_REGISTRY}/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
+                        
+                        # 1. Authenticate Docker with Amazon ECR
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
                         
-                        # 2. Tag and push both specific build tag and latest
+                        # 2. Tag and push images
                         docker tag ${APP_NAME}:local ${IMAGE_URI}
                         docker tag ${APP_NAME}:local ${ECR_REGISTRY}/${APP_NAME}:latest
                         
@@ -89,8 +89,12 @@ pipeline {
 
         stage('Cosign Sign & Verify') {
             steps {
-                withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
+                withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY'),
+                                file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
+                        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                        IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
+                        
                         cosign sign --key "${COSIGN_KEY}" --yes "${IMAGE_URI}"
                         cosign verify --key cosign.pub "${IMAGE_URI}"
                     '''
@@ -102,6 +106,12 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh '''
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                        export AWS_REGION="${AWS_REGION}"
+                        
+                        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                        IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
+                        
                         aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
                         
                         # Apply Kyverno policies, NetworkPolicy, and Deployment
@@ -109,7 +119,7 @@ pipeline {
                         kubectl apply -f k8s/networkpolicy.yaml
                         kubectl apply -f k8s/deployment.yaml
                         
-                        # Update to immutable deployed image
+                        # Set to dynamically built immutable image tag
                         kubectl set image deployment/number-reverser number-reverser=${IMAGE_URI} -n number-reverser
                         kubectl rollout status deployment/number-reverser -n number-reverser --timeout=120s
                     '''
