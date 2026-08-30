@@ -3,9 +3,13 @@ pipeline {
 
     environment {
         AWS_REGION         = 'ap-south-1'
-        AWS_CREDENTIALS_ID = 'aws-credentials'
         APP_NAME           = 'number-reverser'
         CLUSTER_NAME       = 'number-reverser-cluster'
+        
+        // ECR & Registry Credentials (Amazon ECR plugin format: ecr:<region>:<credentials-id>)
+        registryCredential = 'ecr:ap-south-1:aws-credentials'
+        appRegistry        = '374857852848.dkr.ecr.ap-south-1.amazonaws.com/number-reverser'
+        ecrRegistry        = 'https://374857852848.dkr.ecr.ap-south-1.amazonaws.com'
     }
 
     stages {
@@ -44,62 +48,43 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh "docker build --no-cache -t ${APP_NAME}:local ."
+                script {
+                    dockerImage = docker.build("${appRegistry}:${env.BUILD_NUMBER}", "--no-cache .")
+                }
             }
         }
 
         stage('Trivy Security Scan') {
             steps {
-                sh "trivy image --cache-dir .trivy-cache --severity CRITICAL,HIGH --ignore-unfixed --exit-code 0 ${APP_NAME}:local"
+                sh "trivy image --cache-dir .trivy-cache --severity CRITICAL,HIGH --ignore-unfixed --exit-code 0 ${appRegistry}:${env.BUILD_NUMBER}"
             }
         }
 
         stage('Generate SBOM (Syft)') {
             steps {
-                sh "syft ${APP_NAME}:local -o spdx-json=sbom.spdx.json"
+                sh "syft ${appRegistry}:${env.BUILD_NUMBER} -o spdx-json=sbom.spdx.json"
                 archiveArtifacts artifacts: 'sbom.spdx.json', allowEmptyArchive: true
             }
         }
 
-        stage('Push to Amazon ECR') {
+        stage('Upload App Image') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                    sh '''
-                        set -ex
-                        export AWS_DEFAULT_REGION="${AWS_REGION}"
-                        export AWS_REGION="${AWS_REGION}"
-                        
-                        # Dynamically and securely obtain AWS Account ID from authenticated STS identity
-                        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                        echo "Deploying to AWS Account: ${AWS_ACCOUNT_ID}"
-                        
-                        ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                        IMAGE_URI="${ECR_REGISTRY}/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
-                        
-                        # 1. Authenticate Docker with Amazon ECR
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                        
-                        # 2. Tag and push images
-                        docker tag ${APP_NAME}:local ${IMAGE_URI}
-                        docker tag ${APP_NAME}:local ${ECR_REGISTRY}/${APP_NAME}:latest
-                        
-                        docker push ${IMAGE_URI}
-                        docker push ${ECR_REGISTRY}/${APP_NAME}:latest
-                        echo "ECR Push completed successfully!"
-                    '''
+                script {
+                    docker.withRegistry(ecrRegistry, registryCredential) {
+                        dockerImage.push("${env.BUILD_NUMBER}")
+                        dockerImage.push('latest')
+                    }
                 }
             }
         }
 
         stage('Cosign Sign & Verify') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'],
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY'),
                                 file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
                         set -ex
-                        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                        IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
-                        
+                        IMAGE_URI="${appRegistry}:${BUILD_NUMBER}"
                         cosign sign --key "${COSIGN_KEY}" --yes "${IMAGE_URI}"
                         cosign verify --key cosign.pub "${IMAGE_URI}"
                     '''
@@ -109,14 +94,11 @@ pipeline {
 
         stage('Deploy to EKS & Verify') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh '''
                         set -ex
                         export AWS_DEFAULT_REGION="${AWS_REGION}"
                         export AWS_REGION="${AWS_REGION}"
-                        
-                        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                        IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:v1.0.0-${BUILD_NUMBER}"
                         
                         aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
                         
@@ -125,8 +107,8 @@ pipeline {
                         kubectl apply -f k8s/networkpolicy.yaml
                         kubectl apply -f k8s/deployment.yaml
                         
-                        # Set to dynamically built immutable image tag
-                        kubectl set image deployment/number-reverser number-reverser=${IMAGE_URI} -n number-reverser
+                        # Set to deployed image tag
+                        kubectl set image deployment/number-reverser number-reverser=${appRegistry}:${BUILD_NUMBER} -n number-reverser
                         kubectl rollout status deployment/number-reverser -n number-reverser --timeout=120s
                     '''
                 }
