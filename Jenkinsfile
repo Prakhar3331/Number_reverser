@@ -87,6 +87,10 @@ pipeline {
                                 file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY')]) {
                     sh '''
                         set -ex
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                        export AWS_REGION="${AWS_REGION}"
+                        export COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"
+                        
                         IMAGE_URI="${appRegistry}:${BUILD_NUMBER}"
                         cosign sign --key "${COSIGN_KEY}" --yes "${IMAGE_URI}"
                         cosign verify --key cosign.pub "${IMAGE_URI}"
