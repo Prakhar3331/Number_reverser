@@ -4,13 +4,13 @@ pipeline {
     environment {
         AWS_REGION         = 'ap-south-1'
         AWS_CREDENTIALS_ID = 'aws-credentials'
-        AWS_ACCOUNT_ID     = credentials('aws-account-id')
+        AWS_ACCOUNT_ID     = '374857852848'
         APP_NAME           = 'number-reverser'
         CLUSTER_NAME       = 'number-reverser-cluster'
         
         IMAGE_TAG          = "v1.0.0-${env.BUILD_NUMBER}"
-        ECR_REGISTRY       = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        IMAGE_URI          = "${ECR_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
+        ECR_REGISTRY       = "374857852848.dkr.ecr.ap-south-1.amazonaws.com"
+        IMAGE_URI          = "374857852848.dkr.ecr.ap-south-1.amazonaws.com/number-reverser:v1.0.0-${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -70,8 +70,18 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh '''
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                        export AWS_REGION="${AWS_REGION}"
+                        
+                        # 1. Authenticate with ECR
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        
+                        # 2. Tag and push both specific build tag and latest
+                        docker tag ${APP_NAME}:local ${IMAGE_URI}
+                        docker tag ${APP_NAME}:local ${ECR_REGISTRY}/${APP_NAME}:latest
+                        
                         docker push ${IMAGE_URI}
+                        docker push ${ECR_REGISTRY}/${APP_NAME}:latest
                     '''
                 }
             }
