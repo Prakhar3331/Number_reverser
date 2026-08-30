@@ -51,9 +51,11 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh '''
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                        export AWS_REGION="${AWS_REGION}"
                         cd terraform
-                        terraform init
-                        terraform apply -auto-approve
+                        terraform init -input=false
+                        terraform apply -auto-approve -input=false -var="aws_region=${AWS_REGION}"
                     '''
                 }
             }
