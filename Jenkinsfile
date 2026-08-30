@@ -47,20 +47,6 @@ pipeline {
             }
         }
 
-        stage('Terraform Apply (Provision AWS Infrastructure)') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: env.AWS_CREDENTIALS_ID, usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh '''
-                        export AWS_DEFAULT_REGION="${AWS_REGION}"
-                        export AWS_REGION="${AWS_REGION}"
-                        cd terraform
-                        terraform init -input=false
-                        terraform apply -auto-approve -input=false -var="aws_region=${AWS_REGION}"
-                    '''
-                }
-            }
-        }
-
         stage('Docker Build') {
             steps {
                 sh "docker build -t ${IMAGE_URI} -t ${APP_NAME}:local ."
