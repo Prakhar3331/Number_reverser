@@ -179,6 +179,7 @@ resource "aws_ecr_repository" "main" {
   #checkov:skip=CKV_AWS_136:AES256 server-side encryption used to stay within Free Tier
   name                 = var.project_name
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
